@@ -1,0 +1,98 @@
+# GitHub Actions: ilovani bulutda yig'ish (APK + Google Play uchun AAB).
+# Ishga tushirish: GitHub → Actions → "Android yig'ish" → Run workflow,
+# kod yuklanganda (main) yoki "v1.0.0" kabi teg yuborilganda avtomatik.
+name: Android yig'ish (APK + AAB)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    tags: ['v*']
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    timeout-minutes: 45
+    env:
+      # Imzolash kaliti GitHub Secrets'da saqlanadi (README'ga qarang)
+      KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+      KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+      KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+      KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+    steps:
+      - name: Kodni olish
+        uses: actions/checkout@v5
+
+      - name: Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Flutter (stable)
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Android karkasini yaratish va imzolashni ulash
+        run: |
+          flutter --version
+          # Mavjud fayllar o'zgartirilmaydi, faqat yetishmaganlari yaratiladi
+          flutter create --org uz.kodirova --project-name prompt_muhandisligi --platforms android .
+          rm -rf test
+          python3 tool/patch_android.py
+          grep -n -E "compileSdk|targetSdk|minSdk|applicationId" android/app/build.gradle.kts
+
+      - name: Imzolash kalitini tiklash
+        if: env.KEYSTORE_BASE64 != ''
+        run: |
+          echo "$KEYSTORE_BASE64" | base64 --decode > android/app/upload-keystore.jks
+          printf 'storePassword=%s\nkeyPassword=%s\nkeyAlias=%s\nstoreFile=upload-keystore.jks\n' \
+            "$KEYSTORE_PASSWORD" "$KEY_PASSWORD" "$KEY_ALIAS" > android/key.properties
+
+      - name: Kalit yo'qligi haqida ogohlantirish
+        if: env.KEYSTORE_BASE64 == ''
+        run: echo "::warning::Imzolash kaliti berilmagan — fayllar debug kaliti bilan imzolanadi (Google Play qabul qilmaydi, faqat sinov uchun)."
+
+      - name: Paketlarni yuklash va ilova belgisini yaratish
+        run: |
+          flutter pub get
+          dart run flutter_launcher_icons
+
+      - name: Kod tahlili (ma'lumot uchun)
+        continue-on-error: true
+        run: flutter analyze --no-fatal-infos
+
+      - name: APK yig'ish (telefonda sinash uchun)
+        run: flutter build apk --release --obfuscate --split-debug-info=build/symbols
+
+      - name: AAB yig'ish (Google Play)
+        run: flutter build appbundle --release --obfuscate --split-debug-info=build/symbols
+
+      - name: Hajmlarni ko'rsatish
+        run: ls -lh build/app/outputs/flutter-apk/app-release.apk build/app/outputs/bundle/release/app-release.aab
+
+      - name: Natijalarni yuklab olishga tayyorlash
+        uses: actions/upload-artifact@v4
+        with:
+          name: prompt-muhandisligi-${{ github.run_number }}
+          path: |
+            build/app/outputs/flutter-apk/app-release.apk
+            build/app/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
+
+      - name: Natijalarni "natijalar" tarmog'iga joylash
+        run: |
+          mkdir -p /tmp/out
+          cp build/app/outputs/flutter-apk/app-release.apk /tmp/out/prompt_muhandisligi.apk
+          cp build/app/outputs/bundle/release/app-release.aab /tmp/out/prompt_muhandisligi.aab
+          cd /tmp/out
+          git init -q -b natijalar
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -qm "Yig'ma #${{ github.run_number }}"
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" natijalar

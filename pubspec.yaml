@@ -1,0 +1,40 @@
+name: prompt_muhandisligi
+description: "Prompt muhandisligi — ilmiy-metodik qöllanma (oflayn Android ilova)."
+publish_to: 'none'
+
+# 1.0.0 — foydalanuvçiga körinadigan versiya, +1 — Play uçun build raqami (har yuklaşda oşiriladi)
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.5.0
+  flutter: ">=3.27.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  # Rasmiy WebView plagini (Flutter jamoasi): HTML qöllanmani ilova içida körsatadi
+  webview_flutter: ^4.10.0
+  # Android’ga xos sozlamalar (setTextZoom) uçun
+  webview_flutter_android: ^4.0.0
+  # Taşqi havolalarni tizim brauzerida oçiş
+  url_launcher: ^6.3.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+  # Ilova belgisini (ikonka) avtomatik yaratiş: dart run flutter_launcher_icons
+  flutter_launcher_icons: ^0.14.3
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/www/
+    - assets/www/fonts/
+
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: "assets/icon/icon.png"
+  adaptive_icon_background: "#1F3A68"
+  adaptive_icon_foreground: "assets/icon/foreground.png"
